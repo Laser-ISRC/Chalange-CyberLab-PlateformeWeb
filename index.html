@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Demande de tenant — MicroStack</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="masthead">
+  <h1>Demande d'un tenant MicroStack</h1>
+  <p>Renseignez un identifiant. Le portail crée le projet, le compte et les droits associés sur le cloud de test, puis affiche vos accès une seule fois.</p>
+</header>
+
+<main class="layout">
+
+  <section class="pane" id="pane-form">
+    <form id="form" autocomplete="off" novalidate>
+
+      <div class="field" id="field-invite" hidden>
+        <label for="invite">Code d'invitation</label>
+        <input type="text" id="invite" spellcheck="false" autocomplete="off">
+        <p class="hint">Fourni par l'administrateur du lab.</p>
+      </div>
+
+      <div class="field">
+        <label for="username">Identifiant souhaité</label>
+        <input type="text" id="username" placeholder="jmartin" spellcheck="false" required autofocus>
+        <p class="hint">3 à 32 caractères : minuscules, chiffres, point, tiret, souligné. Le projet sera nommé <span class="mono" id="preview-project">jmartin-project</span>.</p>
+        <p class="error" id="err-username" hidden></p>
+      </div>
+
+      <div class="field">
+        <label for="email">Adresse e-mail <span class="optional">facultatif</span></label>
+        <input type="email" id="email" placeholder="jmartin@techfab.lan" spellcheck="false">
+        <p class="error" id="err-email" hidden></p>
+      </div>
+
+      <div class="field">
+        <label for="description">Objet de la demande <span class="optional">facultatif</span></label>
+        <input type="text" id="description" placeholder="TP réseau — promotion 2026">
+      </div>
+
+      <label class="check">
+        <input type="checkbox" id="deploy-lab" checked>
+        <span>Déployer aussi le lab : un routeur, les réseaux <span class="mono">lan-net</span> (<span id="cidr-lan">10.0.10.0/24</span>) et <span class="mono">dmz-net</span> (<span id="cidr-dmz">10.0.20.0/24</span>), le flavor kiwi-concombre, une VM Debian configurée par cloud-init et une IP flottante.</span>
+      </label>
+
+      <details class="howto network-options">
+        <summary>Personnaliser les réseaux internes</summary>
+        <p class="hint">Les deux adresses doivent être des réseaux IPv4 distincts, avec une adresse réseau conforme au CIDR.</p>
+        <div class="field">
+          <label for="cidr1">CIDR du réseau LAN</label>
+          <input type="text" id="cidr1" value="10.0.10.0/24" spellcheck="false">
+          <p class="error" id="err-cidr1" hidden></p>
+        </div>
+        <div class="field">
+          <label for="cidr2">CIDR du réseau DMZ</label>
+          <input type="text" id="cidr2" value="10.0.20.0/24" spellcheck="false">
+          <p class="error" id="err-cidr2" hidden></p>
+        </div>
+      </details>
+
+      <div class="actions">
+        <button type="submit" id="submit" class="primary">Créer mon tenant</button>
+        <span class="delay">Compter une à deux minutes.</span>
+      </div>
+
+      <p class="error banner" id="err-form" hidden></p>
+    </form>
+  </section>
+
+  <section class="pane" id="pane-progress" hidden>
+    <div class="progress-head">
+      <span class="spinner" id="spinner" aria-hidden="true"></span>
+      <h2 id="progress-title">Provisionnement en cours</h2>
+    </div>
+    <ol class="steps" id="steps" aria-live="polite"></ol>
+  </section>
+
+  <section class="pane" id="pane-result" hidden>
+    <h2 id="result-title">Votre tenant est prêt</h2>
+
+    <p class="warning" id="once-warning">
+      Ce mot de passe est affiché une seule fois et n'est conservé nulle part.
+      Notez-le avant de fermer la page.
+    </p>
+
+    <details class="howto" id="result-log-details" hidden>
+      <summary>Journal détaillé du déploiement</summary>
+      <pre class="code" id="result-log"></pre>
+    </details>
+
+    <dl class="credentials">
+      <div><dt>Identifiant</dt><dd class="mono" id="r-username"></dd></div>
+      <div><dt>Projet</dt><dd class="mono" id="r-project"></dd></div>
+      <div><dt>Mot de passe</dt>
+        <dd class="mono secret">
+          <span id="r-password" class="masked">••••••••••••••••</span>
+          <button type="button" class="link" id="reveal">Afficher</button>
+          <button type="button" class="link copy" data-value="password">Copier</button>
+        </dd>
+      </div>
+      <div><dt>Domaine</dt><dd class="mono" id="r-domain"></dd></div>
+      <div><dt>Rôle</dt><dd class="mono" id="r-roles"></dd></div>
+      <div><dt>URL Keystone</dt><dd class="mono" id="r-authurl"></dd></div>
+      <div><dt>Console OpenStack</dt><dd><a class="mono" id="r-horizon" target="_blank" rel="noopener noreferrer"></a></dd></div>
+    </dl>
+
+    <div class="result-actions">
+      <button type="button" class="primary" id="download-rc">Télécharger le fichier openrc</button>
+      <span class="delay" id="expiry"></span>
+    </div>
+
+    <div id="lab-block" hidden>
+      <h3>Infrastructure déployée</h3>
+      <ul class="lab" id="lab-list"></ul>
+
+      <div id="vm-access" hidden>
+        <h3>Accès à la VM Debian</h3>
+        <dl class="credentials">
+          <div><dt>Nom de la VM</dt><dd class="mono" id="vm-name"></dd></div>
+          <div><dt>IP flottante</dt><dd class="mono" id="vm-floating-ip"></dd></div>
+          <div><dt>Utilisateur SSH</dt><dd class="mono" id="vm-username"></dd></div>
+          <div><dt>Mot de passe VM</dt><dd class="mono secret"><span id="vm-password"></span><button type="button" class="link copy" data-scope="vm" data-value="password">Copier</button></dd></div>
+          <div><dt>Clé publique</dt><dd class="mono" id="vm-public-key"></dd></div>
+        </dl>
+        <div class="result-actions">
+          <button type="button" class="primary" id="download-ssh-key">Télécharger la clé SSH privée</button>
+          <button type="button" class="primary" id="download-cloud-init">Télécharger cloud-init.yaml</button>
+        </div>
+        <pre class="code vm-command" id="vm-ssh-command"></pre>
+        <p class="warning">La clé privée et le mot de passe VM disparaîtront du portail à l'expiration indiquée. Conservez la clé privée avec des permissions strictes.</p>
+
+        <div id="vm-console" hidden>
+          <h3>Console de la VM</h3>
+          <p class="hint">Si l'onglet Console d'Horizon ne répond pas, le journal série ci-dessous montre le démarrage de la VM, et le lien ouvre la console OpenStack directement.</p>
+          <div class="result-actions">
+            <a class="primary link-btn" id="vm-console-url" target="_blank" rel="noopener noreferrer" hidden>Ouvrir la console OpenStack</a>
+            <button type="button" class="primary" id="vm-console-refresh">Actualiser le journal</button>
+          </div>
+          <pre class="code console" id="vm-console-log">Journal de console indisponible pour l'instant.</pre>
+        </div>
+      </div>
+    </div>
+
+    <details class="howto">
+      <summary>Utiliser ces accès</summary>
+      <pre class="code" id="howto-code"></pre>
+    </details>
+  </section>
+
+  <section class="pane" id="pane-error" hidden>
+    <h2>La demande n'a pas abouti</h2>
+    <p class="error banner" id="error-message"></p>
+    <details class="howto" id="error-details" hidden>
+      <summary>Journal d'exécution</summary>
+      <pre class="code" id="error-log"></pre>
+    </details>
+    <div class="result-actions">
+      <button type="button" class="primary" id="retry">Revenir au formulaire</button>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <p>Le mot de passe est tiré sur le serveur du portail, transmis à l'hôte MicroStack par une session SSH restreinte aux actions de provisionnement, puis effacé de la mémoire au bout du délai affiché. Il n'apparaît dans aucun journal.</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
